@@ -7,11 +7,13 @@ TODO
 
 
 import os
+from typing import AnyStr, Dict, Iterable
 from tempfile import TemporaryDirectory
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QFormLayout, QLabel,
     QHBoxLayout, QFileDialog, QPlainTextEdit
 )
+from PyQt5.QtCore import QThread, QRunnable, QThreadPool
 import youtube_dl
 import ffmpy3
 
@@ -55,6 +57,26 @@ class _DirBrowser(QWidget):
         )
 
 
+class _Download(QRunnable):
+
+    urls: Iterable[AnyStr] = None
+    download_params: Dict = {}
+
+    def run(self):
+        with youtube_dl.YoutubeDL(self.download_params) as y:
+            y.download(self.urls)
+
+
+class _Convert(QRunnable):
+
+    inputs: Dict = {}
+    outputs: Dict = {}
+
+    def run(self):
+        converter = ffmpy3.FFmpeg(inputs=self.inputs, outputs=self.outputs)
+        converter.run()
+
+
 class Yoink(QWidget):
 
     _urls_field = None
@@ -84,53 +106,32 @@ class Yoink(QWidget):
         main_layout.addLayout(form_layout)
 
         download_button = QPushButton('Download')
-        download_button.clicked.connect(self.download)
 
         main_layout.addWidget(download_button)
 
         self.setLayout(main_layout)
 
-    def download(self):
 
-        urls = self._urls_field.toPlainText().split('\n')
-        ff_formats = self._ff_formats_field.toPlainText().split('\n')
-        output_directory = self._dir_browser.dir_path
-        current_working_directory = os.getcwd()
-
-        with TemporaryDirectory() as t:
-
-            os.chdir(t)
-
-            for url, ff_format in zip(urls, ff_formats):
-
-                if not ff_format.startswith('.'):
-                    continue
-
-                with youtube_dl.YoutubeDL(self.download_params) as y:
-                    y.download([url])
-
-                for file_path in os.listdir(t):
-
-                    if not os.path.isfile(file_path):
-                        continue
-
-                    _, file_name = os.path.split(file_path)
-                    name, extension = os.path.splitext(file_name)
-                    new_file_path = os.path.join(
-                        output_directory,
-                        name + ff_format
-                    )
-
-                    if os.path.exists(new_file_path):
-                        continue
-
-                    x = ffmpy3.FFmpeg(
-                        inputs={file_path: None},
-                        outputs={new_file_path: None}
-                    )
-                    x.run()
-
-            os.chdir(current_working_directory)
+# for file_path in os.listdir(t):
+#
+#     if not os.path.isfile(file_path):
+#         continue
+#
+#     _, file_name = os.path.split(file_path)
+#     name, extension = os.path.splitext(file_name)
+#     new_file_path = os.path.join(
+#         self.output_directory,
+#         name + ff_format
+#     )
+#
+#     if os.path.exists(new_file_path):
+#         continue
+#
+#     x = ffmpy3.FFmpeg(
+#         inputs={file_path: None},
+#         outputs={new_file_path: None}
+#     )
+#     x.run()
 
 
 if __name__ == '__main__':
