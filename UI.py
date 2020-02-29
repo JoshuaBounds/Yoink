@@ -1,5 +1,6 @@
 """
 TODO
+    _YoinkModel having difficulty with the setData method
     Multi threading to keep window from freezing.
     Loading bar, console, or logging file.
     Better ffmpeg format support.
@@ -11,11 +12,14 @@ from typing import AnyStr, Dict, Iterable
 from tempfile import TemporaryDirectory
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QFormLayout, QLabel,
-    QHBoxLayout, QFileDialog, QPlainTextEdit
+    QHBoxLayout, QFileDialog, QPlainTextEdit, QTableView
 )
-from PyQt5.QtCore import QThread, QRunnable, QThreadPool
+from PyQt5.QtCore import QThread, QRunnable, QThreadPool, QAbstractItemModel, QModelIndex, Qt
 import youtube_dl
 import ffmpy3
+
+
+_QModelIndex = QModelIndex
 
 
 class _DirBrowser(QWidget):
@@ -77,10 +81,50 @@ class _Convert(QRunnable):
         converter.run()
 
 
+class _YoinkView(QTableView):
+    pass
+
+
+class _YoinkModel(QAbstractItemModel):
+
+    table = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9]
+    ]
+
+    def rowCount(self, parent=None, *args, **kwargs):
+        return len(self.table)
+
+    def columnCount(self, parent=None, *args, **kwargs):
+        return len(self.table[0])
+
+    def index(self, p_int, p_int_1, parent=None, *args, **kwargs):
+        return self.createIndex(p_int, p_int_1, self.table[p_int][p_int_1])
+
+    def hasChildren(self, parent=None, *args, **kwargs):
+        return False
+
+    def parent(self, QModelIndex=None):
+        return _QModelIndex()
+
+    def data(self, QModelIndex, role=None):
+        if role == Qt.DisplayRole and QModelIndex.isValid():
+            return self.table[QModelIndex.row()][QModelIndex.column()]
+
+    def setData(self, QModelIndex, Any, role=None):
+        if role == Qt.EditRole and QModelIndex.isValid():
+            self.table[QModelIndex.row()][QModelIndex.column()] = Any
+            self.dataChanged.emit(QModelIndex, QModelIndex, [role])
+
+    def flags(self, QModelIndex):
+        if QModelIndex.isValid():
+            return Qt.ItemIsEditable | Qt.ItemIsEnabled
+
+
+
 class Yoink(QWidget):
 
-    _urls_field = None
-    _ff_formats_field = None
     _dir_browser = None
 
     download_params = {'outtmpl': '%(title)s'}
@@ -92,18 +136,10 @@ class Yoink(QWidget):
 
         main_layout = QVBoxLayout()
 
-        form_layout = QFormLayout()
+        view = _YoinkView()
+        view.setModel(_YoinkModel())
 
-        self._urls_field = QPlainTextEdit()
-        form_layout.addRow(QLabel('Input URLs'), self._urls_field)
-
-        self._ff_formats_field = QPlainTextEdit()
-        form_layout.addRow(QLabel('Output Formats'), self._ff_formats_field)
-
-        self._dir_browser = _DirBrowser()
-        form_layout.addRow(QLabel('Output Directory'), self._dir_browser)
-
-        main_layout.addLayout(form_layout)
+        main_layout.addWidget(view)
 
         download_button = QPushButton('Download')
 
