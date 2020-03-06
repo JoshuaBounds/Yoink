@@ -8,18 +8,15 @@ TODO
 
 
 import os
-from typing import AnyStr, Dict, Iterable
+from typing import Any, AnyStr, Dict, Iterable, List
 from tempfile import TemporaryDirectory
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QFormLayout, QLabel,
     QHBoxLayout, QFileDialog, QPlainTextEdit, QTableView
 )
-from PyQt5.QtCore import QThread, QRunnable, QThreadPool, QAbstractItemModel, QModelIndex, Qt
+from PyQt5.QtCore import QThread, QRunnable, QThreadPool, QAbstractTableModel, QModelIndex, Qt, QVariant
 import youtube_dl
 import ffmpy3
-
-
-_QModelIndex = QModelIndex
 
 
 class _DirBrowser(QWidget):
@@ -44,11 +41,11 @@ class _DirBrowser(QWidget):
         self.setLayout(main_layout)
 
     @property
-    def dir_path(self):
+    def dir_path(self) -> AnyStr:
         return self._dir_path
 
     @dir_path.setter
-    def dir_path(self, path):
+    def dir_path(self, path: AnyStr):
         self._dir_path = path
         self._path_field.setText(path)
 
@@ -81,53 +78,38 @@ class _Convert(QRunnable):
         converter.run()
 
 
-class _YoinkView(QTableView):
-    pass
+class YoinkModel(QAbstractTableModel):
 
+    table: List = [[]]
 
-class _YoinkModel(QAbstractItemModel):
-
-    table = [
-        [1, 2, 3],
-        [4, 5, 6],
-        [7, 8, 9]
-    ]
-
-    def rowCount(self, parent=None, *args, **kwargs):
+    def rowCount(self, parent: QModelIndex = None, *args, **kwargs):
         return len(self.table)
 
-    def columnCount(self, parent=None, *args, **kwargs):
+    def columnCount(self, parent: QModelIndex = None, *args, **kwargs):
         return len(self.table[0])
 
-    def index(self, p_int, p_int_1, parent=None, *args, **kwargs):
-        return self.createIndex(p_int, p_int_1, self.table[p_int][p_int_1])
+    def data(self, index: QModelIndex, role: int = None):
+        if role == Qt.DisplayRole:
+            return self.table[index.row()][index.column()]
+        return QVariant()
 
-    def hasChildren(self, parent=None, *args, **kwargs):
+    def setData(self, index: QModelIndex, value: Any, role: int = None):
+        if role == Qt.EditRole:
+            if not self.checkIndex(index):
+                return False
+            self.table[index.row()][index.column()] = value
+            return True
         return False
 
-    def parent(self, QModelIndex=None):
-        return _QModelIndex()
-
-    def data(self, QModelIndex, role=None):
-        if role == Qt.DisplayRole and QModelIndex.isValid():
-            return self.table[QModelIndex.row()][QModelIndex.column()]
-
-    def setData(self, QModelIndex, Any, role=None):
-        if role == Qt.EditRole and QModelIndex.isValid():
-            self.table[QModelIndex.row()][QModelIndex.column()] = Any
-            self.dataChanged.emit(QModelIndex, QModelIndex, [role])
-
-    def flags(self, QModelIndex):
-        if QModelIndex.isValid():
-            return Qt.ItemIsEditable | Qt.ItemIsEnabled
-
+    def flags(self, index: QModelIndex):
+        return Qt.ItemIsEditable | QAbstractTableModel.flags(self, index)
 
 
 class Yoink(QWidget):
 
     _dir_browser = None
 
-    download_params = {'outtmpl': '%(title)s'}
+    download_params: Dict = {'outtmpl': '%(title)s'}
 
     def __init__(self, *args, **kwargs):
         super(Yoink, self).__init__(*args, **kwargs)
@@ -136,13 +118,11 @@ class Yoink(QWidget):
 
         main_layout = QVBoxLayout()
 
-        view = _YoinkView()
-        view.setModel(_YoinkModel())
-
+        view = QTableView()
+        view.setModel(YoinkModel())
         main_layout.addWidget(view)
 
         download_button = QPushButton('Download')
-
         main_layout.addWidget(download_button)
 
         self.setLayout(main_layout)
@@ -176,6 +156,12 @@ if __name__ == '__main__':
     from PyQt5.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
-    win = Yoink()
+
+    # win = Yoink()
+    # win.show()
+
+    win = QTableView()
+    win.setModel(YoinkModel())
     win.show()
+
     app.exec_()
