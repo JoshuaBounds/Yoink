@@ -80,24 +80,27 @@ class _Convert(QRunnable):
 
 class YoinkModel(QAbstractTableModel):
 
-    table: List = [[]]
+    table: Dict = {}
+    rows: int = 0
+    columns: int = 0
 
     def rowCount(self, parent: QModelIndex = None, *args, **kwargs):
-        return len(self.table)
+        return self.rows
 
     def columnCount(self, parent: QModelIndex = None, *args, **kwargs):
-        return len(self.table[0])
+        return self.columns
 
     def data(self, index: QModelIndex, role: int = None):
         if role == Qt.DisplayRole:
-            return self.table[index.row()][index.column()]
+            column = self.table.get(index.row(), {})
+            return column.get(index.column(), QVariant())
         return QVariant()
 
     def setData(self, index: QModelIndex, value: Any, role: int = None):
         if role == Qt.EditRole:
             if not self.checkIndex(index):
                 return False
-            self.table[index.row()][index.column()] = value
+            self.table.setdefault(index.row(), {})[index.column()] = value
             return True
         return False
 
@@ -161,7 +164,10 @@ if __name__ == '__main__':
     # win.show()
 
     win = QTableView()
-    win.setModel(YoinkModel())
+    model = YoinkModel()
+    model.rows = 2
+    model.columns = 5
+    win.setModel(model)
     win.show()
 
     app.exec_()
