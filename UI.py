@@ -8,6 +8,7 @@ TODO
 
 
 import os
+from pprint import pprint
 from typing import Any, AnyStr, Dict, Iterable, List
 from tempfile import TemporaryDirectory
 from PyQt5.QtWidgets import (
@@ -101,11 +102,32 @@ class YoinkModel(QAbstractTableModel):
             if not self.checkIndex(index):
                 return False
             self.table.setdefault(index.row(), {})[index.column()] = value
+            if index.row() + 1 == self.rows:
+                self.insertRow(self.rows)
+            pprint(self.table)
+            print(self.rows)
+            print(self.columns)
             return True
         return False
 
     def flags(self, index: QModelIndex):
         return Qt.ItemIsEditable | QAbstractTableModel.flags(self, index)
+
+    def insertRows(self, p_int, p_int_1, parent=None, *args, **kwargs):
+        self.beginInsertRows(parent, p_int, p_int + p_int_1 - 1)
+        for i in range(self.rows - 1, p_int - 1, -1):
+            self.table[i + p_int_1] = self.table.get(i, {})
+        self.rows += p_int_1
+        self.endInsertRows()
+        return True
+
+    def removeRows(self, p_int, p_int_1, parent=None, *args, **kwargs):
+        self.beginRemoveRows()
+        for i in range(p_int, self.rows):
+            self.table[i] = self.table.get(i + p_int_1, {})
+        self.rows -= p_int_1
+        self.endRemoveRows()
+        return True
 
 
 class Yoink(QWidget):
