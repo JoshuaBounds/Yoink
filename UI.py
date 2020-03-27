@@ -59,7 +59,7 @@ class _DirBrowser(QWidget):
         )
 
 
-class _Download(QRunnable):
+class _YoutubeDL_Runnable(QRunnable):
 
     urls: Iterable[AnyStr] = None
     download_params: Dict = {}
@@ -69,7 +69,7 @@ class _Download(QRunnable):
             y.download(self.urls)
 
 
-class _Convert(QRunnable):
+class _FFMPEG_Runnable(QRunnable):
 
     inputs: Dict = {}
     outputs: Dict = {}
@@ -79,7 +79,7 @@ class _Convert(QRunnable):
         converter.run()
 
 
-class YoinkModel(QAbstractTableModel):
+class _Model(QAbstractTableModel):
 
     table: Dict = {}
     rows: int = 0
@@ -92,41 +92,69 @@ class YoinkModel(QAbstractTableModel):
         return self.columns
 
     def data(self, index: QModelIndex, role: int = None):
+
         if role == Qt.DisplayRole:
             column = self.table.get(index.row(), {})
             return column.get(index.column(), QVariant())
+
         return QVariant()
 
     def setData(self, index: QModelIndex, value: Any, role: int = None):
+
         if role == Qt.EditRole:
+
             if not self.checkIndex(index):
                 return False
+
             self.table.setdefault(index.row(), {})[index.column()] = value
-            if index.row() + 1 == self.rows:
+
+            data_in_row = any(
+                self.table.get(index.row(), {}).get(i)
+                for i in range(self.columns)
+            )
+
+            if not data_in_row and self.rows > 1:
+                self.removeRow(index.row())
+            elif data_in_row and index.row() + 1 == self.rows:
                 self.insertRow(self.rows)
-            pprint(self.table)
-            print(self.rows)
-            print(self.columns)
+
             return True
+
         return False
 
     def flags(self, index: QModelIndex):
         return Qt.ItemIsEditable | QAbstractTableModel.flags(self, index)
 
     def insertRows(self, p_int, p_int_1, parent=None, *args, **kwargs):
+
         self.beginInsertRows(parent, p_int, p_int + p_int_1 - 1)
+
         for i in range(self.rows - 1, p_int - 1, -1):
-            self.table[i + p_int_1] = self.table.get(i, {})
+            self.table[i + p_int_1] = (
+                dict(self.table[i])
+                if i in self.table else
+                {}
+            )
+
         self.rows += p_int_1
         self.endInsertRows()
+
         return True
 
     def removeRows(self, p_int, p_int_1, parent=None, *args, **kwargs):
-        self.beginRemoveRows()
+
+        self.beginRemoveRows(parent, p_int, p_int + p_int_1 - 1)
+
         for i in range(p_int, self.rows):
-            self.table[i] = self.table.get(i + p_int_1, {})
+            self.table[i] = (
+                dict(self.table[i + p_int_1])
+                if i + p_int_1 in self.table else
+                {}
+            )
+
         self.rows -= p_int_1
         self.endRemoveRows()
+
         return True
 
 
@@ -144,7 +172,10 @@ class Yoink(QWidget):
         main_layout = QVBoxLayout()
 
         view = QTableView()
-        view.setModel(YoinkModel())
+        model = _Model()
+        model.rows = 1
+        model.columns = 4
+        view.setModel(model)
         main_layout.addWidget(view)
 
         download_button = QPushButton('Download')
@@ -182,14 +213,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    # win = Yoink()
-    # win.show()
-
-    win = QTableView()
-    model = YoinkModel()
-    model.rows = 2
-    model.columns = 5
-    win.setModel(model)
+    win = Yoink()
     win.show()
 
     app.exec_()
