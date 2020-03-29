@@ -148,7 +148,6 @@ class Yoink:
             self.download(self.dl_urls, self.dl_params)
 
             if self.ff_output_ext or self.ff_out_params:
-
                 self.convert_directory(
                     working_dir,
                     self.output_dir or starting_dir,
@@ -158,7 +157,6 @@ class Yoink:
                 )
 
             else:
-
                 for file_name in os.listdir(working_dir):
                     path = os.path.join(
                         self.output_dir or starting_dir,
