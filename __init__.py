@@ -3,7 +3,9 @@ from tempfile import TemporaryDirectory
 import os
 import shutil
 import json
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QFormLayout, QTextEdit
+from PyQt5.Qt import Qt
+from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QFormLayout, QTextEdit, QStackedLayout, QLabel
 import youtube_dl
 import ffmpy3
 
@@ -34,13 +36,6 @@ class Yoink:
 
         def __exit__(self, exc_type, exc_val, exc_tb):
             os.chdir(self.starting_dir)
-
-    @staticmethod
-    def exec_json_loads(data):
-        try:
-            return json.loads(data)
-        except json.decoder.JSONDecodeError:
-            return None
 
     @staticmethod
     def download(dl_urls, dl_params):
@@ -105,21 +100,46 @@ class Yoink:
             os.chdir(starting_dir)
 
 
+class Emitter(QObject):
+    signal = pyqtSignal()
+
+
+class YoinkRunnable(QRunnable, Yoink):
+
+    finished: Emitter = None
+
+    def __init__(self, *args, **kwargs):
+        super(YoinkRunnable, self).__init__(*args, **kwargs)
+        self.finished = Emitter()
+
+    def run(self):
+        self.yoink()
+        self.finished.signal.emit()
+
+
 class YoinkWidget(QWidget, Yoink):
 
+    _main_layout: QStackedLayout = None
     _dl_urls: QTextEdit = None
     _dl_params: QTextEdit = None
     _ff_output_ext: QLineEdit = None
     _ff_in_params: QTextEdit = None
     _ff_out_params: QTextEdit = None
     _download: QPushButton = None
+    _runnable: YoinkRunnable = None
 
     def __init__(self, *args, **kwargs):
         super(YoinkWidget, self).__init__(*args, **kwargs)
 
-        layout = QVBoxLayout(self)
-        form_layout = QFormLayout(self)
-        layout.addLayout(form_layout)
+        self._main_layout = main_layout = QStackedLayout()
+        self.setLayout(main_layout)
+
+        yoink_widget = QWidget()
+        main_layout.addWidget(yoink_widget)
+        yoink_layout = QVBoxLayout()
+        yoink_widget.setLayout(yoink_layout)
+        form_layout = QFormLayout()
+        yoink_layout.addLayout(form_layout)
         self._dl_urls = dl_urls = QTextEdit()
         form_layout.addRow('dl urls', dl_urls)
         self._ff_output_ext = ff_output_ext = QLineEdit()
@@ -133,28 +153,52 @@ class YoinkWidget(QWidget, Yoink):
         self._ff_out_params = ff_out_params = QTextEdit()
         form_layout.addRow('ff out params', ff_out_params)
         self._download = download = QPushButton('Download')
-        download.clicked.connect(self._yoink)
-        layout.addWidget(download)
+        download.clicked.connect(self.yoink)
+        yoink_layout.addWidget(download)
 
-    def _yoink(self):
-        self.dl_urls = [
+        loading_widget = QWidget()
+        main_layout.addWidget(loading_widget)
+        loading_layout = QVBoxLayout()
+        loading_widget.setLayout(loading_layout)
+        loading_label = QLabel('Loading...')
+        loading_label.setAlignment(Qt.AlignCenter)
+        loading_layout.addWidget(loading_label)
+
+        self._runnable = YoinkRunnable()
+        self._runnable.setAutoDelete(False)
+        self._runnable.finished.signal.connect(
+            lambda: self._main_layout.setCurrentIndex(0)
+        )
+
+    @staticmethod
+    def exec_json_loads(data):
+        try:
+            return json.loads(data)
+        except json.decoder.JSONDecodeError:
+            return None
+
+    def yoink(self):
+
+        self._runnable.dl_urls = [
             x for x in map(str.strip, self._dl_urls.toPlainText().split('\n'))
             if x
         ]
-        self.ff_output_ext = self._ff_output_ext.text().strip()
-        self.output_dir = self._output_dir.text().strip()
-        self.dl_params = self.exec_json_loads(self._dl_params.toPlainText())
-        self.ff_in_params = self.exec_json_loads(self._ff_in_params.toPlainText())
-        self.ff_out_params = self.exec_json_loads(self._ff_out_params.toPlainText())
+        self._runnable.ff_output_ext = self._ff_output_ext.text().strip()
+        self._runnable.output_dir = self._output_dir.text().strip()
+        self._runnable.dl_params = self.exec_json_loads(
+            self._dl_params.toPlainText()
+        )
+        self._runnable.ff_in_params = self.exec_json_loads(
+            self._ff_in_params.toPlainText()
+        )
+        self._runnable.ff_out_params = self.exec_json_loads(
+            self._ff_out_params.toPlainText()
+        )
 
-        print(list(self.dl_urls))
-        print(self.ff_output_ext)
-        print(self.output_dir)
-        print(self.dl_params)
-        print(self.ff_in_params)
-        print(self.ff_out_params)
+        self._main_layout.setCurrentIndex(1)
 
-        self.yoink()
+        thread_pool = QThreadPool.globalInstance()
+        thread_pool.start(self._runnable)
 
 
 if __name__ == '__main__':
