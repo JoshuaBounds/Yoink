@@ -1,4 +1,4 @@
-from typing import Any, AnyStr, List
+from typing import Any, AnyStr, List, Union
 from tempfile import TemporaryDirectory
 import os
 import shutil
@@ -11,6 +11,10 @@ import ffmpy3
 
 
 class Yoink:
+    """
+    Youtube-DL and FFMPEG tool for downloading and converting youtube
+    videos.
+    """
 
     dl_urls: List = None
     dl_params: Any = None
@@ -20,14 +24,24 @@ class Yoink:
     output_dir: AnyStr = None
 
     class ChangeDir:
+        """
+        Context manager that Temporarily changes the working directory
+        to `directory` before returning to the initial current working
+        directory.
+        """
 
         working_dir: AnyStr = None
         starting_dir: AnyStr = None
 
-        def __init__(self, working_dir):
-            if not os.path.isdir(working_dir):
-                raise FileExistsError('`working_dir` does not exist')
-            self.working_dir = working_dir
+        def __init__(self, directory: AnyStr):
+            """
+            :param directory:
+                Target directory to change the current working directory
+                to.
+            """
+            if not os.path.isdir(directory):
+                raise FileExistsError('`directory` is invalid')
+            self.working_dir = directory
 
         def __enter__(self):
             self.starting_dir = os.getcwd()
@@ -38,17 +52,63 @@ class Yoink:
             os.chdir(self.starting_dir)
 
     @staticmethod
-    def download(dl_urls, dl_params):
-        with youtube_dl.YoutubeDL(dl_params) as y:
-            y.download(dl_urls)
+    def download(urls: List = None, params: Any = None):
+        """
+        youtube_dl wrapper.
+        :param urls:
+            URls of youtube videos to download.
+        :param params:
+            Youtube-DL parameters.
+        """
+        with youtube_dl.YoutubeDL(params) as y:
+            y.download(urls)
 
     @staticmethod
     def convert(inputs, outputs):
+        """
+        ffmpy3 wrapper.
+        :param inputs:
+            Equivalent to ffmpy3.FFmpeg(inputs=...).
+        :param outputs:
+            Equivalent to ffmpy3.FFmpeg(outputs=...).
+        """
         converter = ffmpy3.FFmpeg(inputs=inputs, outputs=outputs)
         converter.run()
 
     @classmethod
-    def convert_directory(cls, src, dst, output_ext, in_params, out_params):
+    def convert_directory(
+            cls,
+            src: AnyStr,
+            dst: AnyStr,
+            output_ext,
+            in_params,
+            out_params
+    ):
+        """
+        Performs `convert` on all files in `src` with the results going
+        to `dst`.
+        Output files will overwrite existing files.
+        Raises FileNoteFound if either `src` or `dst` are an
+        invalid location.
+        :param src:
+            Source directory to convert files from.
+        :param dst:
+            Destination of the converted files.
+        :param output_ext:
+            Extension given to the converted files. This also determines
+            the file's type.
+        :param in_params:
+            Input parameters given to each converted file.
+            Equivalent to ffmpy3.FFmpeg(inputs={FILE: ...}).
+        :param out_params:
+            Output parameters given to each converted file.
+            Equivalent to ffmpy3.FFmpeg(outputs={FILE: ...}).
+        """
+
+        if not os.path.isdir(src):
+            raise FileNotFoundError('Invalid location given for `src`')
+        if not os.path.isdir(dst):
+            raise FileNotFoundError('Invalid location given for `dst`')
 
         file_paths = (
             (os.path.join(src, file_name), os.path.join(dst, file_name))
@@ -68,9 +128,18 @@ class Yoink:
             )
 
     def yoink(self):
+        """
+        Downloads and converts videos using class attributes:
+            dl_urls: List
+            dl_params: Any
+            ff_output_ext: AnyStr
+            ff_in_params: Any
+            ff_out_params: Any
+            output_dir: AnyStr
+        """
 
-        if not self.dl_urls:
-            return None
+        if not isinstance(self.dl_urls, list):
+            raise ValueError('`dl_urls` must be a list')
 
         td = TemporaryDirectory
         cd = self.ChangeDir
@@ -100,17 +169,19 @@ class Yoink:
             os.chdir(starting_dir)
 
 
-class Emitter(QObject):
-    signal = pyqtSignal()
-
-
 class YoinkRunnable(QRunnable, Yoink):
+    """
+    QRunnable version of `Yoink`.
+    """
+
+    class Emitter(QObject):
+        signal: pyqtSignal = pyqtSignal()
 
     finished: Emitter = None
 
     def __init__(self, *args, **kwargs):
         super(YoinkRunnable, self).__init__(*args, **kwargs)
-        self.finished = Emitter()
+        self.finished = self.Emitter()
 
     def run(self):
         self.yoink()
@@ -118,6 +189,9 @@ class YoinkRunnable(QRunnable, Yoink):
 
 
 class YoinkWidget(QWidget, Yoink):
+    """
+    QWidget version of `Yoink`.
+    """
 
     _main_layout: QStackedLayout = None
     _dl_urls: QTextEdit = None
@@ -171,13 +245,26 @@ class YoinkWidget(QWidget, Yoink):
         )
 
     @staticmethod
-    def exec_json_loads(data):
+    def exec_json_loads(data: AnyStr) -> Union[Any, None]:
+        """
+        Wrapper for json.loads that returns `None` instead of raising a
+        `json.decoder.JSONDecodeError`.
+        :param data:
+            json data to decode.
+        :return:
+            Either the decoded json data, or None if it could not be
+            decoded.
+        """
         try:
             return json.loads(data)
         except json.decoder.JSONDecodeError:
             return None
 
     def yoink(self):
+        """
+        Runs yoink using data gathered from the Widget's UI. During this
+        time the UI cannot be used until the yoink process finishes.
+        """
 
         self._runnable.dl_urls = [
             x for x in map(str.strip, self._dl_urls.toPlainText().split('\n'))
