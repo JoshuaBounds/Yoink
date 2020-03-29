@@ -249,11 +249,6 @@ class YoinkWidget(QWidget, Yoink):
         """
         Wrapper for json.loads that returns `None` instead of raising a
         `json.decoder.JSONDecodeError`.
-        :param data:
-            json data to decode.
-        :return:
-            Either the decoded json data, or None if it could not be
-            decoded.
         """
         try:
             return json.loads(data)
@@ -281,6 +276,10 @@ class YoinkWidget(QWidget, Yoink):
         self._runnable.ff_out_params = self.exec_json_loads(
             self._ff_out_params.toPlainText()
         )
+
+        if not os.path.isdir(self._runnable.output_dir):
+            print('Invalid output directory')
+            return None
 
         self._main_layout.setCurrentIndex(1)
 
