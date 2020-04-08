@@ -1,176 +1,131 @@
-from typing import Any, AnyStr, List, Union
-from tempfile import TemporaryDirectory
 import os
-import shutil
 import json
-from PyQt5.Qt import Qt
-from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QFormLayout, QTextEdit, QStackedLayout, QLabel
+from typing import *
+from PyQt5.QtCore import *
+from PyQt5.QtWidgets import *
 import youtube_dl
-import ffmpy3
 
 
-class Yoink:
+class BrowserWidget(QWidget):
     """
-    Youtube-DL and FFMPEG tool for downloading and converting youtube
-    videos.
+    Creates a directory browser widget that displays the currently
+    selected directory location.
     """
 
-    dl_urls: List = None
-    dl_params: Any = None
-    ff_output_ext: AnyStr = None
-    ff_in_params: Any = None
-    ff_out_params: Any = None
-    output_dir: AnyStr = None
+    _path_field: QLineEdit = None
 
-    class ChangeDir:
+    def __init__(self, *args, **kwargs):
+        super(BrowserWidget, self).__init__(*args, **kwargs)
+
+        main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(main_layout)
+
+        self._path_field = path_field = QLineEdit()
+        path_field.setText(os.environ['userprofile'])
+        path_field.setEnabled(False)
+        main_layout.addWidget(path_field)
+
+        browser_button = QPushButton('...')
+        browser_button.clicked.connect(self.open_dir_browser)
+        main_layout.addWidget(browser_button)
+
+    def open_dir_browser(self):
         """
-        Context manager that Temporarily changes the working directory
-        to `directory` before returning to the initial current working
-        directory.
+        Opens a file browser to set the widgets displayed directory.
+        :return:
+            Displayed file path.
         """
-
-        working_dir: AnyStr = None
-        starting_dir: AnyStr = None
-
-        def __init__(self, directory: AnyStr):
-            """
-            :param directory:
-                Target directory to change the current working directory
-                to.
-            """
-            if not os.path.isdir(directory):
-                raise FileExistsError('`directory` is invalid')
-            self.working_dir = directory
-
-        def __enter__(self):
-            self.starting_dir = os.getcwd()
-            os.chdir(self.working_dir)
-            return self.starting_dir
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            os.chdir(self.starting_dir)
-
-    @staticmethod
-    def download(urls: List = None, params: Any = None):
-        """
-        youtube_dl wrapper.
-        :param urls:
-            URls of youtube videos to download.
-        :param params:
-            Youtube-DL parameters.
-        """
-        with youtube_dl.YoutubeDL(params) as y:
-            y.download(urls)
-
-    @staticmethod
-    def convert(inputs, outputs):
-        """
-        ffmpy3 wrapper.
-        :param inputs:
-            Equivalent to ffmpy3.FFmpeg(inputs=...).
-        :param outputs:
-            Equivalent to ffmpy3.FFmpeg(outputs=...).
-        """
-        converter = ffmpy3.FFmpeg(inputs=inputs, outputs=outputs)
-        converter.run()
-
-    @classmethod
-    def convert_directory(
-            cls,
-            src: AnyStr,
-            dst: AnyStr,
-            output_ext,
-            in_params,
-            out_params
-    ):
-        """
-        Performs `convert` on all files in `src` with the results going
-        to `dst`.
-        Output files will overwrite existing files.
-        Raises FileNoteFound if either `src` or `dst` are an
-        invalid location.
-        :param src:
-            Source directory to convert files from.
-        :param dst:
-            Destination of the converted files.
-        :param output_ext:
-            Extension given to the converted files. This also determines
-            the file's type.
-        :param in_params:
-            Input parameters given to each converted file.
-            Equivalent to ffmpy3.FFmpeg(inputs={FILE: ...}).
-        :param out_params:
-            Output parameters given to each converted file.
-            Equivalent to ffmpy3.FFmpeg(outputs={FILE: ...}).
-        """
-
-        if not os.path.isdir(src):
-            raise FileNotFoundError('Invalid location given for `src`')
-        if not os.path.isdir(dst):
-            raise FileNotFoundError('Invalid location given for `dst`')
-
-        file_paths = (
-            (os.path.join(src, file_name), os.path.join(dst, file_name))
-            for file_name in os.listdir(src)
+        path = QFileDialog.getExistingDirectory(
+            self,
+            'set output directory'.title(),
+            self._path_field.text(),
+            QFileDialog.ShowDirsOnly
         )
-        for src_file_path, dst_file_path in file_paths:
-            new_dst_file_path = (
-                os.path.splitext(dst_file_path)[0] + output_ext
-                if output_ext else
-                dst_file_path
-            )
-            if os.path.isfile(new_dst_file_path):
-                os.remove(new_dst_file_path)
-            cls.convert(
-                {src_file_path: in_params},
-                {new_dst_file_path: out_params}
-            )
+        path and self._path_field.setText(path)
+        return self._path_field.text()
 
-    def yoink(self):
+    def get_path(self):
         """
-        Downloads and converts videos using class attributes:
-            dl_urls: List
-            dl_params: Any
-            ff_output_ext: AnyStr
-            ff_in_params: Any
-            ff_out_params: Any
-            output_dir: AnyStr
+        :return:
+            Displayed directory location.
         """
-
-        if not isinstance(self.dl_urls, list):
-            raise ValueError('`dl_urls` must be a list')
-
-        td = TemporaryDirectory
-        cd = self.ChangeDir
-        with td() as working_dir, cd(working_dir) as starting_dir:
-
-            self.download(self.dl_urls, self.dl_params)
-
-            if self.ff_output_ext or self.ff_out_params:
-                self.convert_directory(
-                    working_dir,
-                    self.output_dir or starting_dir,
-                    self.ff_output_ext,
-                    self.ff_in_params,
-                    self.ff_out_params
-                )
-
-            else:
-                for file_name in os.listdir(working_dir):
-                    path = os.path.join(
-                        self.output_dir or starting_dir,
-                        file_name
-                    )
-                    shutil.move(file_name, path)
-
-            os.chdir(starting_dir)
+        path = self._path_field.text()
+        return os.path.isdir(path) and path or None
 
 
-class YoinkRunnable(QRunnable, Yoink):
+class ParamWidget(QWidget):
     """
-    QRunnable version of `Yoink`.
+    Widget for editing youtube-dl parameters.
     """
+
+    _param_field: QLineEdit = None
+
+    def __init__(self, *args, **kwargs):
+        super(ParamWidget, self).__init__(*args, **kwargs)
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(main_layout)
+
+        preset_layout = QHBoxLayout()
+        preset_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addLayout(preset_layout)
+
+        load_preset_button = QPushButton('load preset')
+        preset_layout.addWidget(load_preset_button)
+
+        save_preset_button = QPushButton('save preset')
+        preset_layout.addWidget(save_preset_button)
+
+        self._param_field = param_field = QPlainTextEdit()
+        param_field.setTabStopWidth(12)
+        main_layout.addWidget(param_field)
+
+    def get_params(self):
+        """
+        :return:
+            Decoded Parameter data, or None if the data could not be
+            decoded.
+        """
+        try:
+            return json.loads(self._param_field.toPlainText())
+        except json.decoder.JSONDecodeError:
+            return None
+
+
+class ChangeDirectory:
+    """
+    Context manager for temporarily changing python's current working
+    directory.
+    """
+
+    _path = None
+    _start_dir = None
+
+    def __init__(self, path):
+        """
+        :param path:
+             Path to the target working directory.
+        """
+        self._path = path
+
+    def __enter__(self):
+        os.path.isdir(self._path or '') and os.chdir(self._path)
+        self._start_dir = os.getcwd()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        os.chdir(self._start_dir)
+
+
+class YoinkRunnable(QRunnable):
+    """
+    Performs the task of downloading video using the given data.
+    """
+
+    urls = None
+    params = None
+    output_dir = None
 
     class Emitter(QObject):
         signal: pyqtSignal = pyqtSignal()
@@ -182,22 +137,21 @@ class YoinkRunnable(QRunnable, Yoink):
         self.finished = self.Emitter()
 
     def run(self):
-        self.yoink()
+        with ChangeDirectory(self.output_dir):
+            with youtube_dl.YoutubeDL(self.params) as downloader:
+                downloader.download(self.urls)
         self.finished.signal.emit()
 
 
-class YoinkWidget(QWidget, Yoink):
+class YoinkWidget(QWidget):
     """
-    QWidget version of `Yoink`.
+    Yoink's main widget.
     """
 
     _main_layout: QStackedLayout = None
-    _dl_urls: QTextEdit = None
-    _dl_params: QTextEdit = None
-    _ff_output_ext: QLineEdit = None
-    _ff_in_params: QTextEdit = None
-    _ff_out_params: QTextEdit = None
-    _download: QPushButton = None
+    _url_field: QLineEdit = None
+    _param_widget: ParamWidget = None
+    _browser_widget: BrowserWidget = None
     _runnable: YoinkRunnable = None
 
     def __init__(self, *args, **kwargs):
@@ -206,89 +160,65 @@ class YoinkWidget(QWidget, Yoink):
         self._main_layout = main_layout = QStackedLayout()
         self.setLayout(main_layout)
 
-        yoink_widget = QWidget()
-        main_layout.addWidget(yoink_widget)
-        yoink_layout = QVBoxLayout()
-        yoink_widget.setLayout(yoink_layout)
+        # Download layout
+
+        download_widget = QWidget()
+        main_layout.addWidget(download_widget)
+
+        download_layout = QVBoxLayout()
+        download_widget.setLayout(download_layout)
+
         form_layout = QFormLayout()
-        yoink_layout.addLayout(form_layout)
-        self._dl_urls = dl_urls = QTextEdit()
-        form_layout.addRow('dl urls', dl_urls)
-        self._ff_output_ext = ff_output_ext = QLineEdit()
-        form_layout.addRow('ff output ext', ff_output_ext)
-        self._output_dir = output_dir = QLineEdit()
-        form_layout.addRow('output dir', output_dir)
-        self._dl_params = dl_params = QTextEdit()
-        form_layout.addRow('dl params', dl_params)
-        self._ff_in_params = ff_in_params = QTextEdit()
-        form_layout.addRow('ff in params', ff_in_params)
-        self._ff_out_params = ff_out_params = QTextEdit()
-        form_layout.addRow('ff out params', ff_out_params)
-        self._download = download = QPushButton('Download')
-        download.clicked.connect(self.yoink)
-        yoink_layout.addWidget(download)
+        download_layout.addLayout(form_layout)
+
+        self._url_field = url_field = QPlainTextEdit()
+        form_layout.addRow('urls', url_field)
+
+        self._param_widget =param_widget = ParamWidget()
+        form_layout.addRow('params', param_widget)
+
+        self._browser_widget = browser_widget = BrowserWidget()
+        form_layout.addRow('output dir', browser_widget)
+
+        download_button = QPushButton('download')
+        download_button.clicked.connect(self.yoink)
+        download_layout.addWidget(download_button)
+
+        # Loading layout
 
         loading_widget = QWidget()
         main_layout.addWidget(loading_widget)
+
         loading_layout = QVBoxLayout()
         loading_widget.setLayout(loading_layout)
-        loading_label = QLabel('Loading...')
+
+        loading_label = QLabel('loading')
         loading_label.setAlignment(Qt.AlignCenter)
         loading_layout.addWidget(loading_label)
 
-        self._runnable = YoinkRunnable()
-        self._runnable.setAutoDelete(False)
-        self._runnable.finished.signal.connect(
-            lambda: self._main_layout.setCurrentIndex(0)
-        )
+        # Runnable
 
-    @staticmethod
-    def exec_json_loads(data: AnyStr) -> Union[Any, None]:
-        """
-        Wrapper for json.loads that returns `None` instead of raising a
-        `json.decoder.JSONDecodeError`.
-        """
-        try:
-            return json.loads(data)
-        except json.decoder.JSONDecodeError:
-            return None
+        self._runnable = runnable = YoinkRunnable()
+        runnable.setAutoDelete(False)
+        runnable.finished.signal.connect(
+            lambda: main_layout.setCurrentIndex(0)
+        )
 
     def yoink(self):
         """
-        Runs yoink using data gathered from the Widget's UI. During this
-        time the UI cannot be used until the yoink process finishes.
+        Starts downloading process using data gathered from the gui.
         """
-
-        self._runnable.dl_urls = [
-            x for x in map(str.strip, self._dl_urls.toPlainText().split('\n'))
-            if x
-        ]
-        self._runnable.ff_output_ext = self._ff_output_ext.text().strip()
-        self._runnable.output_dir = self._output_dir.text().strip()
-        self._runnable.dl_params = self.exec_json_loads(
-            self._dl_params.toPlainText()
-        )
-        self._runnable.ff_in_params = self.exec_json_loads(
-            self._ff_in_params.toPlainText()
-        )
-        self._runnable.ff_out_params = self.exec_json_loads(
-            self._ff_out_params.toPlainText()
-        )
-
-        if not os.path.isdir(self._runnable.output_dir):
-            print('Invalid output directory')
-            return None
-
+        runnable = self._runnable
+        runnable.urls = self._url_field.toPlainText().split('\n')
+        runnable.params = self._param_widget.get_params()
+        runnable.output_dir = self._browser_widget.get_path()
         self._main_layout.setCurrentIndex(1)
-
-        thread_pool = QThreadPool.globalInstance()
-        thread_pool.start(self._runnable)
+        QThreadPool.globalInstance().start(runnable)
 
 
 if __name__ == '__main__':
 
     import sys
-    from PyQt5.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
 
