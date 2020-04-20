@@ -2,10 +2,10 @@ import os
 import json
 import warnings
 from typing import *
+import youtube_dl
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
-import youtube_dl
 
 
 class BrowserWidget(QWidget):
@@ -27,7 +27,7 @@ class BrowserWidget(QWidget):
         self._path_label = path_label = QLabel(self)
         main_layout.addWidget(path_label)
 
-        browser_button = QPushButton('...', self)
+        browser_button = QPushButton('Browse', self)
         browser_button.clicked.connect(self.open_dir_browser)
         browser_button.setMaximumWidth(80)
         main_layout.addWidget(browser_button)
@@ -101,11 +101,11 @@ class ParamWidget(QWidget):
         preset_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addLayout(preset_layout)
 
-        load_preset_button = QPushButton('load preset', self)
+        load_preset_button = QPushButton('load preset'.title(), self)
         load_preset_button.clicked.connect(self.open_load_preset_browser)
         preset_layout.addWidget(load_preset_button)
 
-        save_preset_button = QPushButton('save preset', self)
+        save_preset_button = QPushButton('save preset'.title(), self)
         save_preset_button.clicked.connect(self.open_save_preset_browser)
         preset_layout.addWidget(save_preset_button)
 
@@ -270,11 +270,37 @@ class YoinkWidget(QWidget):
 
         self.setWindowTitle('Yoink')
         self.resize(600, 400)
-        self.setFont(QFont('Consolas', -1, -1, False))
+        # self.setFont(QFont('Consolas', -1, -1, False))
+        self.setStyleSheet('''
+        * {
+            font-family: Arial;
+            font-size: 10pt;
+            font-weight: 200;
+            background-color: rgb(40, 40, 40);
+            color: rgb(0, 255, 255);
+        }
+        QPushButton {
+            border: 2px solid rgb(0, 255, 255);
+            background-color: rgb(0, 55, 55);
+            padding: 5px;
+            border-radius: 3px
+        }
+        QPushButton:hover {
+            background-color: rgb(0, 255, 255);
+            color: black;
+        }
+        QPushButton#download_button {
+            font-size: 12pt;
+        }
+        QPlainTextEdit {
+            font-family: Fixedsys;
+            background-color: black;
+        }
+        ''')
         self._main_layout = main_layout = QStackedLayout(self)
         self.setLayout(main_layout)
 
-        # Download layout
+        # Download widget layout
 
         download_widget = QWidget(self)
         main_layout.addWidget(download_widget)
@@ -294,11 +320,12 @@ class YoinkWidget(QWidget):
         self._browser_widget = browser_widget = BrowserWidget(download_widget)
         form_layout.addRow('output directory'.title(), browser_widget)
 
-        download_button = QPushButton('download', download_widget)
+        download_button = QPushButton('download'.title(), download_widget)
+        download_button.setObjectName('download_button')
         download_button.clicked.connect(self.yoink)
         download_layout.addWidget(download_button)
 
-        # Loading layout
+        # Loading widget layout
 
         loading_widget = QWidget(self)
         main_layout.addWidget(loading_widget)
