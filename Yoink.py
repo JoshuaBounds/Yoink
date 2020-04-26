@@ -1,20 +1,17 @@
 """
 TODO:
-    Check all typing.
     Redo window state preservation.
 """
 
-import os
-import shutil
-import json
-import warnings
 from tempfile import TemporaryDirectory
 from typing import *
+import warnings
+import shutil
+import os
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 import youtube_dl
 import ffmpy3
-from PyQt5.QtGui import *
-from PyQt5.QtCore import *
-from PyQt5.QtWidgets import *
 
 
 class YoinkRunnable(QRunnable):
@@ -35,7 +32,7 @@ class YoinkRunnable(QRunnable):
         self.finished = self.Emitter()
 
     @staticmethod
-    def convert_dir(src_dir, dst_dir, file_ext):
+    def convert_dir(src_dir: AnyStr, dst_dir: AnyStr, file_ext: AnyStr):
         """
         Converts all files in the given directory (src_dir) with the
         output going to the given directory (dst_dir).
@@ -44,7 +41,7 @@ class YoinkRunnable(QRunnable):
         :param dst_dir:
             Destination directory path.
         :param file_ext:
-            File type to convert all files to.
+            File type to convert all files to (should not include the `.`).
         """
         for file_name in os.listdir(src_dir):
             file_path = os.path.join(src_dir, file_name)
@@ -59,7 +56,7 @@ class YoinkRunnable(QRunnable):
             converter.run()
 
     @staticmethod
-    def copy_dir(src_dir, dst_dir):
+    def copy_dir(src_dir: AnyStr, dst_dir: AnyStr):
         """
         Copies all files in a given directory (src_dir) to the given
         directory (dst_dir).
@@ -75,7 +72,7 @@ class YoinkRunnable(QRunnable):
             )
 
     @staticmethod
-    def download_urls(urls, dst_dir):
+    def download_urls(urls: List[AnyStr], dst_dir: AnyStr):
         """
         Downloads given urls to the given directory.
         :param urls:
@@ -151,7 +148,7 @@ class BrowserWidget(QWidget):
 
 class DownloadWidget(QWidget):
     """
-    Creates a simple dir path display and browser combo.
+    Displays Yoink's video downloading controls.
     """
 
     url_field: QPlainTextEdit = None
@@ -184,7 +181,7 @@ class DownloadWidget(QWidget):
         download_button.setObjectName('download_button')
         main_layout.addWidget(download_button)
 
-    def get_download_urls(self):
+    def get_download_urls(self) -> List[AnyStr]:
         """
         :return:
             All urls in the url field
@@ -194,7 +191,7 @@ class DownloadWidget(QWidget):
             if x
         ]
 
-    def get_output_ext(self):
+    def get_output_ext(self) -> AnyStr:
         """
         :return:
             The current selected output extension.
@@ -207,7 +204,7 @@ class DownloadWidget(QWidget):
             extension
         )
 
-    def get_output_dir(self):
+    def get_output_dir(self) -> AnyStr:
         """
         :return:
             The path currently in the output dir field.
@@ -240,10 +237,10 @@ class YoinkWidget(QWidget):
     """
 
     _main_layout: QStackedLayout = None
-    _runnable: YoinkRunnable = None
 
     download_widget: DownloadWidget = None
     loading_widget: LoadingWidget = None
+    runnable: YoinkRunnable = None
 
     def __init__(self, *args, **kwargs):
         super(YoinkWidget, self).__init__(*args, **kwargs)
@@ -292,7 +289,7 @@ class YoinkWidget(QWidget):
         self.loading_widget = loading_widget = LoadingWidget(self)
         main_layout.addWidget(loading_widget)
 
-        self._runnable = runnable = YoinkRunnable()
+        self.runnable = runnable = YoinkRunnable()
         runnable.setAutoDelete(False)
         runnable.finished.signal.connect(
             lambda: main_layout.setCurrentIndex(0)
@@ -302,7 +299,7 @@ class YoinkWidget(QWidget):
         """
         Starts downloading process using data gathered from the gui.
         """
-        runnable = self._runnable
+        runnable = self.runnable
         runnable.urls = self.download_widget.get_download_urls()
         runnable.output_ext = self.download_widget.get_output_ext()
         runnable.output_dir = self.download_widget.get_output_dir()
