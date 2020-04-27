@@ -247,38 +247,6 @@ class YoinkWidget(QWidget):
 
         self.setWindowTitle('Yoink')
         self.resize(600, 400)
-        self.setStyleSheet('''
-            * {
-                background-color: rgb(40, 40, 40);
-                color: rgb(0, 255, 255);
-                font-family: Arial;
-                font-size: 10pt;
-                font-weight: 200;
-            }
-            QComboBox {
-                background-color: rgb(0, 55, 55);
-                padding: 5px;
-                border: 2px solid rgb(0, 255, 255);
-                border-radius: 3px
-            }
-            QPlainTextEdit {
-                font-family: Fixedsys;
-                background-color: black;
-            }
-            QPushButton {
-                background-color: rgb(0, 55, 55);
-                padding: 5px;
-                border: 2px solid rgb(0, 255, 255);
-                border-radius: 3px
-            }
-            QPushButton:hover {
-                background-color: rgb(0, 255, 255);
-                color: black;
-            }
-            QPushButton#download_button {
-                font-size: 12pt;
-            }
-        ''')
         self._main_layout = main_layout = QStackedLayout(self)
         self.setLayout(main_layout)
 
@@ -315,6 +283,42 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
 
     win = YoinkWidget()
+    win.setStyleSheet('''
+        * {
+            background-color: rgb(40, 40, 40);
+            color: rgb(0, 255, 255);
+            font-family: Arial;
+            font-size: 10pt;
+            font-weight: 200;
+        }
+        QComboBox {
+            background-color: rgb(0, 55, 55);
+            padding: 5px;
+            border: 2px solid rgb(0, 255, 255);
+            border-radius: 3px
+        }        
+        QComboBox:hover {
+            background-color: rgb(0, 255, 255);
+            color: black;
+        }
+        QPlainTextEdit {
+            font-family: Fixedsys;
+            background-color: black;
+        }
+        QPushButton {
+            background-color: rgb(0, 55, 55);
+            padding: 5px;
+            border: 2px solid rgb(0, 255, 255);
+            border-radius: 3px
+        }
+        QPushButton:hover {
+            background-color: rgb(0, 255, 255);
+            color: black;
+        }
+        QPushButton#download_button {
+            font-size: 12pt;
+        }
+    ''')
     win.show()
 
     sys.exit(app.exec_())
