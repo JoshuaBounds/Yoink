@@ -1,324 +1,112 @@
 """
-TODO:
-    Redo window state preservation.
+Youtube downloader and file converter.
+Requires environment to contain youtube-dl.exe and ffmpeg.exe
 """
 
-from tempfile import TemporaryDirectory
-from typing import *
-import warnings
-import shutil
+
 import os
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-import youtube_dl
-import ffmpy3
+from typing         import *
+from tempfile       import TemporaryDirectory
+from subprocess     import Popen
 
 
-class YoinkRunnable(QRunnable):
+__all__ = 'download', 'convert', 'convert_dir', 'yoink'
+
+
+def download(url: AnyStr, dst_dir: AnyStr) -> NoReturn:
     """
-    Performs the task of downloading video using the given data.
-    """
-
-    urls: List[AnyStr] = None
-    output_ext: AnyStr = None
-    output_dir: AnyStr = None
-    finished: 'Emitter' = None
-
-    class Emitter(QObject):
-        signal: pyqtSignal = pyqtSignal()
-
-    def __init__(self, *args, **kwargs):
-        super(YoinkRunnable, self).__init__(*args, **kwargs)
-        self.finished = self.Emitter()
-
-    @staticmethod
-    def convert_dir(src_dir: AnyStr, dst_dir: AnyStr, file_ext: AnyStr):
-        """
-        Converts all files in the given directory (src_dir) with the
-        output going to the given directory (dst_dir).
-        :param src_dir:
-            Source directory path.
-        :param dst_dir:
-            Destination directory path.
-        :param file_ext:
-            File type to convert all files to (should not include the `.`).
-        """
-        for file_name in os.listdir(src_dir):
-            file_path = os.path.join(src_dir, file_name)
-            new_file_path = os.path.join(
-                dst_dir,
-                os.path.splitext(file_name)[0] + '.' + file_ext
-            )
-            converter = ffmpy3.FFmpeg(
-                inputs={file_path: None},
-                outputs={new_file_path: None}
-            )
-            converter.run()
-
-    @staticmethod
-    def copy_dir(src_dir: AnyStr, dst_dir: AnyStr):
-        """
-        Copies all files in a given directory (src_dir) to the given
-        directory (dst_dir).
-        :param src_dir:
-            Source directory path.
-        :param dst_dir:
-            Destination directory path.
-        """
-        for file_name in os.listdir(src_dir):
-            shutil.copyfile(
-                os.path.join(src_dir, file_name),
-                os.path.join(dst_dir, file_name)
-            )
-
-    @staticmethod
-    def download_urls(urls: List[AnyStr], dst_dir: AnyStr):
-        """
-        Downloads given urls to the given directory.
-        :param urls:
-            youtube urls to download.
-        :param dst_dir:
-            Destination directory for downloaded files.
-        """
-        out_template = {'outtmpl': os.path.join(dst_dir, '%(title)s.%(ext)s')}
-        with youtube_dl.YoutubeDL(out_template) as downloader:
-            try:
-                downloader.download(urls)
-            except youtube_dl.DownloadError as e:
-                warnings.warn('download failure')
-                warnings.warn(e)
-
-    def run(self):
-
-        print('>> urls:', self.urls)
-        print('>> output_ext:', self.output_ext)
-        print('>> output_dir:', self.output_dir)
-
-        with TemporaryDirectory() as temp_dir:
-            self.download_urls(self.urls, temp_dir)
-            if self.output_ext is None:
-                self.copy_dir(temp_dir, self.output_dir)
-            else:
-                self.convert_dir(temp_dir, self.output_dir, self.output_ext)
-
-        self.finished.signal.emit()
-
-
-class BrowserWidget(QWidget):
-    """
-    Creates a directory browser widget that displays the currently
-    selected directory location.
+    Alias wrapper function for youtube-dl.
+    Downloads videos contained in the given url to the target directory.
+    :param url:
+        Youtube url. Can be video, or playlist.
+    :param dst_dir:
+        Destination directory for the downloaded videos.
     """
 
-    path_label: QLabel = None
-    browser_starting_dir: AnyStr = None
+    # Creates the command for the youtube-dl subprocess.
+    cmd = (
+        r'youtube-dl.exe %s' % url
+        + r' --output %s\%%(title)s.%%(ext)s' % dst_dir
+    )
 
-    def __init__(self, *args, **kwargs):
-        super(BrowserWidget, self).__init__(*args, **kwargs)
-
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(main_layout)
-
-        self.path_label = path_label = QLabel(self)
-        main_layout.addWidget(path_label)
-
-        browser_button = QPushButton('Browse', self)
-        browser_button.clicked.connect(self.open_dir_browser)
-        browser_button.setMaximumWidth(80)
-        main_layout.addWidget(browser_button)
-
-    def open_dir_browser(self) -> AnyStr:
-        """
-        Opens a file browser to set the widgets displayed directory.
-        :return:
-            Displayed file path.
-        """
-        path = QFileDialog.getExistingDirectory(
-            self,
-            'set output directory'.title(),
-            self.browser_starting_dir or os.environ['userprofile'],
-            QFileDialog.ShowDirsOnly
-        )
-        if path:
-            self.path_label.setText(path)
-            self.browser_starting_dir = path
-        return self.path_label.text()
+    # Runs the youtube-dl subprocess.
+    process = Popen(cmd)
+    process.wait()
 
 
-class DownloadWidget(QWidget):
+def convert(in_path: AnyStr, out_path: AnyStr) -> NoReturn:
     """
-    Displays Yoink's video downloading controls.
+    Converts given input file path to the given output file path.
+    The extension of the output file path defines the resulting
+    converted file type.
+    :param in_path:
+        Path to the input file.
+    :param out_path:
+        Path of the desired output file. Extension will determine the
+        resulting file type.
     """
 
-    url_field: QPlainTextEdit = None
-    browser_widget: BrowserWidget = None
-    download_button: QPushButton = None
+    # Creates the command for the ffmpeg subprocess.
+    cmd = 'ffmpeg.exe -i "%s" "%s"' % (in_path, out_path)
 
-    def __init__(self, *args, **kwargs):
-        super(DownloadWidget, self).__init__(*args, **kwargs)
-
-        main_layout = QVBoxLayout(self)
-        self.setLayout(main_layout)
-
-        form_layout = QFormLayout(self)
-        main_layout.addLayout(form_layout)
-
-        self.url_field = url_field = QPlainTextEdit(self)
-        form_layout.addRow('download urls:'.title(), url_field)
-
-        self.ext_combobox = ext_combobox = QComboBox(self)
-        ext_combobox.addItem('default'.title())
-        ext_combobox.addItems(sorted(('avi', 'mkv', 'mp3', 'mp4', 'wav')))
-        form_layout.addRow('output file type:'.title(), ext_combobox)
-
-        self.browser_widget = browser_widget = BrowserWidget(self)
-        form_layout.addRow('output directory:'.title(), browser_widget)
-
-        self.download_button = download_button = (
-            QPushButton('download'.title(), self)
-        )
-        download_button.setObjectName('download_button')
-        main_layout.addWidget(download_button)
-
-    def get_download_urls(self) -> List[AnyStr]:
-        """
-        :return:
-            All urls in the url field
-        """
-        return [
-            x for x in self.url_field.toPlainText().split('\n')
-            if x
-        ]
-
-    def get_output_ext(self) -> AnyStr:
-        """
-        :return:
-            The current selected output extension.
-            Returns `None` instead of `default`.
-        """
-        extension = self.ext_combobox.currentText()
-        return (
-            None
-            if extension.casefold() == 'default'.casefold() else
-            extension
-        )
-
-    def get_output_dir(self) -> AnyStr:
-        """
-        :return:
-            The path currently in the output dir field.
-            Returns the `userprofile` env var, if path is invalid.
-        """
-        path = self.browser_widget.path_label.text()
-        return path if os.path.exists(path) else os.environ['userprofile']
+    # Runs the ffmpeg subprocess.
+    process = Popen(cmd)
+    process.wait()
 
 
-class LoadingWidget(QWidget):
+def convert_dir(src_dir: AnyStr, out_dir: AnyStr, ext: AnyStr) -> NoReturn:
     """
-    Displayed when `YoinkWidget` requires the user to wait while the
-    previous action is being processed.
+    Converts every file in the given directory to the given file type at
+    the given output directory.
+    :param src_dir:
+        Directory of files to convert.
+    :param out_dir:
+        Directory for the resulting converted files.
+    :param ext:
+        Extension which defines the converted file type.
     """
 
-    def __init__(self, *args, **kwargs):
-        super(LoadingWidget, self).__init__(*args, **kwargs)
+    # Gets all files in the given source dir.
+    for file_name in os.listdir(src_dir):
 
-        main_layout = QVBoxLayout(self)
-        self.setLayout(main_layout)
+        # Generates the target file path, and the destination file path.
+        file_path           = os.path.join(src_dir, file_name)
+        name, _             = os.path.splitext(file_name)
+        output_file_path    = os.path.join(out_dir, name) + ext
 
-        loading_label = QLabel('loading', self)
-        loading_label.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(loading_label)
+        # Converted the file.
+        convert(file_path, output_file_path)
 
 
-class YoinkWidget(QWidget):
+def yoink(url: AnyStr, ext: AnyStr, out_dir: AnyStr) -> NoReturn:
     """
-    Yoink's main widget.
+    Downloads and converts all videos from the given url to the given
+    file extension type with the results going to the given output
+    directory.
+    :param url:
+        Youtube url. Can be video or playlist.
+    :param ext:
+        Desired output file extension. This will define the converted
+        output file type.
+    :param out_dir:
+        The output directory for all converted files.
     """
 
-    _main_layout: QStackedLayout = None
+    # Creates a temporary directory for the raw downloaded videos.
+    with TemporaryDirectory() as temp_dir:
 
-    download_widget: DownloadWidget = None
-    loading_widget: LoadingWidget = None
-    runnable: YoinkRunnable = None
+        # Downloads videos into the temporary directory.
+        download(url, temp_dir)
 
-    def __init__(self, *args, **kwargs):
-        super(YoinkWidget, self).__init__(*args, **kwargs)
-
-        self.setWindowTitle('Yoink')
-        self.resize(600, 400)
-        self._main_layout = main_layout = QStackedLayout(self)
-        self.setLayout(main_layout)
-
-        self.download_widget = download_widget = DownloadWidget(self)
-        download_widget.download_button.clicked.connect(self.download)
-        main_layout.addWidget(download_widget)
-
-        self.loading_widget = loading_widget = LoadingWidget(self)
-        main_layout.addWidget(loading_widget)
-
-        self.runnable = runnable = YoinkRunnable()
-        runnable.setAutoDelete(False)
-        runnable.finished.signal.connect(
-            lambda: main_layout.setCurrentIndex(0)
-        )
-
-    def download(self):
-        """
-        Starts downloading process using data gathered from the gui.
-        """
-        runnable = self.runnable
-        runnable.urls = self.download_widget.get_download_urls()
-        runnable.output_ext = self.download_widget.get_output_ext()
-        runnable.output_dir = self.download_widget.get_output_dir()
-
-        self._main_layout.setCurrentIndex(1)
-        QThreadPool.globalInstance().start(runnable)
+        # Converts all videos in the temporary directory with the output
+        # going to the given output directory.
+        convert_dir(temp_dir, out_dir, ext)
 
 
 if __name__ == '__main__':
 
-    import sys
+    url         = input('Download URL:')
+    extension   = input('Output file type extension:')
+    output_dir  = input('Output directory:')
 
-    app = QApplication(sys.argv)
-
-    win = YoinkWidget()
-    win.setStyleSheet('''
-        * {
-            background-color: rgb(40, 40, 40);
-            color: rgb(0, 255, 255);
-            font-family: Arial;
-            font-size: 10pt;
-            font-weight: 200;
-        }
-        QComboBox {
-            background-color: rgb(0, 55, 55);
-            padding: 5px;
-            border: 2px solid rgb(0, 255, 255);
-            border-radius: 3px
-        }        
-        QComboBox:hover {
-            background-color: rgb(0, 255, 255);
-            color: black;
-        }
-        QPlainTextEdit {
-            font-family: Fixedsys;
-            background-color: black;
-        }
-        QPushButton {
-            background-color: rgb(0, 55, 55);
-            padding: 5px;
-            border: 2px solid rgb(0, 255, 255);
-            border-radius: 3px
-        }
-        QPushButton:hover {
-            background-color: rgb(0, 255, 255);
-            color: black;
-        }
-        QPushButton#download_button {
-            font-size: 12pt;
-        }
-    ''')
-    win.show()
-
-    sys.exit(app.exec_())
+    yoink(url, extension, output_dir)
