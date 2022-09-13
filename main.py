@@ -55,6 +55,10 @@ class DirBrowserWidget(QtWidgets.QWidget):
 
 
 class Emitter(QtCore.QObject):
+    """
+    Allows signals to be emitted from objects that do not
+    inherit from QObject.
+    """
     signal = QtCore.pyqtSignal()
 
 
@@ -85,6 +89,7 @@ class Converter(QtCore.QRunnable):
     dir_path: AnyStr = None
     src_txt: AnyStr = None
     dst_txt: AnyStr = None
+    remove_converted = False
 
     def __init__(self, *args, **kwargs):
         super(Converter, self).__init__(*args, **kwargs)
@@ -95,22 +100,25 @@ class Converter(QtCore.QRunnable):
             if os.path.isdir(os.path.join(self.dir_path, filename)):
                 continue
             new_name = os.path.splitext(filename)[0] + self.dst_txt
+            src_path = os.path.join(self.dir_path, filename)
             (
                 ffmpeg
-                .input(os.path.join(self.dir_path, filename))
+                .input(src_path)
                 .output(os.path.join(self.dir_path, new_name))
                 .run()
             )
+            if self.remove_converted:
+                os.remove(src_path)
         self.finished.signal.emit()
 
 
-class YoinkMainPage(QtWidgets.QWidget):
+class MainPage(QtWidgets.QWidget):
     """
     Main page for YoinkWidget, contains downloader and converter.
     """
 
     def __init__(self, *args, **kwargs):
-        super(YoinkMainPage, self).__init__(*args, **kwargs)
+        super(MainPage, self).__init__(*args, **kwargs)
 
         self.downloader_started = Emitter()
         self.converter_started = Emitter()
@@ -142,6 +150,9 @@ class YoinkMainPage(QtWidgets.QWidget):
         self.convert_dst_txf = QtWidgets.QLineEdit()
         convert_layout.addWidget(self.convert_dst_txf)
 
+        self.remove_converted_chb = QtWidgets.QCheckBox('remove converted'.title())
+        self.layout().addWidget(self.remove_converted_chb)
+
         convert_btn = QtWidgets.QPushButton('Convert')
         convert_btn.clicked.connect(self.convert)
         self.layout().addWidget(convert_btn)
@@ -166,13 +177,14 @@ class YoinkMainPage(QtWidgets.QWidget):
         self.converter.dir_path = self.dir_browser.path
         self.converter.src_txt = self.convert_src_txf.text()
         self.converter.dst_txt = self.convert_dst_txf.text()
+        self.converter.remove_converted = self.remove_converted_chb.isChecked()
         QtCore.QThreadPool.globalInstance().start(self.converter)
 
 
-class LoadingWidget(QtWidgets.QWidget):
+class LoadingPage(QtWidgets.QWidget):
 
     def __init__(self, *args, **kwargs):
-        super(LoadingWidget, self).__init__(*args, **kwargs)
+        super(LoadingPage, self).__init__(*args, **kwargs)
 
         hlayout = QtWidgets.QHBoxLayout()
         self.setLayout(hlayout)
@@ -192,14 +204,14 @@ class YoinkWidget(QtWidgets.QWidget):
 
         self.setLayout(QtWidgets.QStackedLayout())
 
-        main_page = YoinkMainPage()
+        main_page = MainPage()
         main_page.downloader.finished.signal.connect(self.switch_main_page)
         main_page.converter.finished.signal.connect(self.switch_main_page)
         main_page.downloader_started.signal.connect(self.switch_loading_page)
         main_page.converter_started.signal.connect(self.switch_loading_page)
         self.layout().addWidget(main_page)
 
-        loading_page = LoadingWidget()
+        loading_page = LoadingPage()
         self.layout().addWidget(loading_page)
 
     def switch_main_page(self):
@@ -214,6 +226,7 @@ def main():
 
     app = QtWidgets.QApplication(sys.argv)
     win = YoinkWidget()
+    win.setWindowTitle('Yoink')
     win.setStyleSheet('''
         * {
             background-color: rgb(40, 40, 40);
@@ -235,6 +248,18 @@ def main():
         QPushButton:hover {
             background-color: rgb(0, 255, 255);
             color: black;
+        }
+        QCheckBox::indicator {
+            background-color: rgb(0, 55, 55);
+            padding: 5px;
+            border: 2px solid rgb(0, 255, 255);
+            border-radius: 3px
+        }
+        QCheckBox::indicator:checked {
+            background-color: rgb(0, 255, 255);
+        }
+        QCheckBox::indicator:unchecked {
+            background-color: rgb(0, 55, 55);
         }
     ''')
     win.show()
