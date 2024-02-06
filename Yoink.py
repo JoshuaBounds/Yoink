@@ -2,6 +2,7 @@ from typing import *
 import os
 import fnmatch
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtCore import Qt
 import ffmpeg
 import yt_dlp
 
@@ -112,61 +113,80 @@ class Converter(QtCore.QRunnable):
         self.finished.signal.emit()
 
 
-class MainPage(QtWidgets.QWidget):
+class YoinkTabsWidget(QtWidgets.QWidget):
     """
-    Main page for YoinkWidget, contains downloader and converter.
+    Widget containing the main control tabs for yoink controls
     """
 
     def __init__(self, *args, **kwargs):
-        super(MainPage, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.downloader_started = Emitter()
         self.converter_started = Emitter()
 
-        self.setLayout(QtWidgets.QVBoxLayout())
-
-        # Downloader
-        self.dir_browser = DirBrowserWidget()
-        self.dir_browser.layout().setContentsMargins(0, 0, 0, 0)
-        self.layout().addWidget(self.dir_browser)
-
-        self.urls_txe = QtWidgets.QPlainTextEdit()
-        self.layout().addWidget(self.urls_txe)
-
-        download_btn = QtWidgets.QPushButton('download'.title())
-        download_btn.clicked.connect(self.download)
-        self.layout().addWidget(download_btn)
-
         self.downloader = Downloader()
         self.downloader.setAutoDelete(False)
 
-        # Converter
-        convert_layout = QtWidgets.QHBoxLayout()
-        self.layout().addLayout(convert_layout)
-
-        self.convert_src_txf = QtWidgets.QLineEdit()
-        convert_layout.addWidget(self.convert_src_txf)
-
-        self.convert_dst_txf = QtWidgets.QLineEdit()
-        convert_layout.addWidget(self.convert_dst_txf)
-
-        self.remove_converted_chb = QtWidgets.QCheckBox('remove converted'.title())
-        self.layout().addWidget(self.remove_converted_chb)
-
-        convert_btn = QtWidgets.QPushButton('Convert')
-        convert_btn.clicked.connect(self.convert)
-        self.layout().addWidget(convert_btn)
-
         self.converter = Converter()
         self.converter.setAutoDelete(False)
+
+        # Main layout
+
+        self.setLayout(QtWidgets.QVBoxLayout())
+
+        # Browser widget
+
+        self.dirBrowserWidget = DirBrowserWidget()
+        self.layout().addWidget(self.dirBrowserWidget)
+
+        # Tabs widget
+
+        self.tabsWidget = QtWidgets.QTabWidget()
+        self.layout().addWidget(self.tabsWidget)
+
+        self.downloaderWidget = QtWidgets.QWidget()
+        self.tabsWidget.addTab(self.downloaderWidget, "Downloader")
+
+        self.converterWidget = QtWidgets.QWidget()
+        self.tabsWidget.addTab(self.converterWidget, "Converter")
+
+        # Downloader Tab
+
+        self.downloaderWidget.setLayout(QtWidgets.QVBoxLayout())
+
+        self.downloadURLs = QtWidgets.QPlainTextEdit("https://youtu.be/dQw4w9WgXcQ?si=ymodleyJzawYilQW")
+        self.downloaderWidget.layout().addWidget(self.downloadURLs)
+
+        self.downloadButton = QtWidgets.QPushButton("Download")
+        self.downloadButton.clicked.connect(self.download)
+        self.downloaderWidget.layout().addWidget(self.downloadButton)
+
+        # Converter Tab
+
+        self.converterWidget.setLayout(QtWidgets.QVBoxLayout())
+
+        self.srcExtension = QtWidgets.QLineEdit(".wav")
+        self.converterWidget.layout().addWidget(self.srcExtension)
+
+        self.dstExtension = QtWidgets.QLineEdit(".mp3")
+        self.converterWidget.layout().addWidget(self.dstExtension)
+
+        self.convertButton = QtWidgets.QPushButton("Convert")
+        self.convertButton.clicked.connect(self.convert)
+        self.converterWidget.layout().addWidget(self.convertButton)
+
+        self.removeConvertedCheckbox = QtWidgets.QCheckBox("Remove Converted")
+        self.converterWidget.layout().addWidget(self.removeConvertedCheckbox)
+
+        self.converterWidget.layout().addStretch()
 
     def download(self):
         """
         Performs the download task in a new thread.
         """
         self.downloader_started.signal.emit()
-        self.downloader.urls = [x for x in self.urls_txe.toPlainText().split('\n') if x]
-        self.downloader.dirpath = self.dir_browser.path
+        self.downloader.urls = [x for x in self.downloadURLs.toPlainText().split('\n') if x]
+        self.downloader.dirpath = self.dirBrowserWidget.path
         QtCore.QThreadPool.globalInstance().start(self.downloader)
 
     def convert(self):
@@ -174,10 +194,10 @@ class MainPage(QtWidgets.QWidget):
         Performs the conversion task in a new thread.
         """
         self.converter_started.signal.emit()
-        self.converter.dir_path = self.dir_browser.path
-        self.converter.src_txt = self.convert_src_txf.text()
-        self.converter.dst_txt = self.convert_dst_txf.text()
-        self.converter.remove_converted = self.remove_converted_chb.isChecked()
+        self.converter.dir_path = self.dirBrowserWidget.path
+        self.converter.src_txt = "*" + self.srcExtension.text()
+        self.converter.dst_txt = self.dstExtension.text()
+        self.converter.remove_converted = self.removeConvertedCheckbox.isChecked()
         QtCore.QThreadPool.globalInstance().start(self.converter)
 
 
@@ -186,15 +206,15 @@ class LoadingPage(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
         super(LoadingPage, self).__init__(*args, **kwargs)
 
-        hlayout = QtWidgets.QHBoxLayout()
-        self.setLayout(hlayout)
+        h_layout = QtWidgets.QHBoxLayout()
+        self.setLayout(h_layout)
 
-        vlayout = QtWidgets.QVBoxLayout()
-        hlayout.addLayout(vlayout)
+        v_layout = QtWidgets.QVBoxLayout()
+        h_layout.addLayout(v_layout)
 
         label = QtWidgets.QLabel('Loading...')
-        label.setAlignment(QtCore.Qt.AlignCenter)
-        hlayout.addWidget(label)
+        label.setAlignment(Qt.AlignCenter)
+        h_layout.addWidget(label)
 
 
 class YoinkWidget(QtWidgets.QWidget):
@@ -204,12 +224,12 @@ class YoinkWidget(QtWidgets.QWidget):
 
         self.setLayout(QtWidgets.QStackedLayout())
 
-        main_page = MainPage()
-        main_page.downloader.finished.signal.connect(self.switch_main_page)
-        main_page.converter.finished.signal.connect(self.switch_main_page)
-        main_page.downloader_started.signal.connect(self.switch_loading_page)
-        main_page.converter_started.signal.connect(self.switch_loading_page)
-        self.layout().addWidget(main_page)
+        self.tabsWidget = YoinkTabsWidget()
+        self.tabsWidget.downloader.finished.signal.connect(self.switch_main_page)
+        self.tabsWidget.downloader_started.signal.connect(self.switch_loading_page)
+        self.tabsWidget.converter.finished.signal.connect(self.switch_main_page)
+        self.tabsWidget.converter_started.signal.connect(self.switch_loading_page)
+        self.layout().addWidget(self.tabsWidget)
 
         loading_page = LoadingPage()
         self.layout().addWidget(loading_page)
@@ -227,6 +247,7 @@ def main():
     app = QtWidgets.QApplication(sys.argv)
     win = YoinkWidget()
     win.setWindowTitle('Yoink')
+    win.resize(600, 400)
     win.setStyleSheet('''
         * {
             background-color: rgb(40, 40, 40);
@@ -234,6 +255,9 @@ def main():
             font-family: Arial;
             font-size: 10pt;
             font-weight: 200;
+        }
+        QLabel#sectionLabel {
+            background-color: rgb(0, 55, 55);
         }
         QPlainTextEdit {
             font-family: Fixedsys;
@@ -260,6 +284,15 @@ def main():
         }
         QCheckBox::indicator:unchecked {
             background-color: rgb(0, 55, 55);
+        }
+        QTabBar::tab {
+            background-color: rgb(40, 40, 40);
+        }
+        QTabBar::tab:selected {
+            background-color: rgb(0, 55, 55);
+            padding: 5px;
+            border: 2px solid rgb(0, 255, 255);
+            border-radius: 3px
         }
     ''')
     win.show()
