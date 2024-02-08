@@ -1,4 +1,5 @@
 from typing import *
+import subprocess
 import os
 import fnmatch
 from PyQt5 import QtWidgets, QtCore
@@ -21,7 +22,7 @@ class DirBrowserWidget(QtWidgets.QWidget):
         """
         super(DirBrowserWidget, self).__init__(*args, **kwargs)
 
-        self.starting_dir = starting_dir or os.getcwd()
+        self.starting_dir = starting_dir or os.path.expanduser('~')
 
         self.setLayout(QtWidgets.QHBoxLayout())
 
@@ -32,6 +33,11 @@ class DirBrowserWidget(QtWidgets.QWidget):
         browser_btn.setMaximumWidth(80)
         browser_btn.clicked.connect(self.open_dir_browser)
         self.layout().addWidget(browser_btn)
+
+        explorer_btn = QtWidgets.QPushButton('open folder'.title())
+        explorer_btn.setMaximumWidth(110)
+        explorer_btn.clicked.connect(self.open_explorer)
+        self.layout().addWidget(explorer_btn)
 
     @property
     def path(self):
@@ -50,9 +56,13 @@ class DirBrowserWidget(QtWidgets.QWidget):
             QtWidgets.QFileDialog.ShowDirsOnly
         )
         if path:
+            path = os.path.abspath(path)
             self.path_txf.setText(path)
             self.starting_dir = path
         return self.path_txf.text()
+
+    def open_explorer(self):
+        subprocess.Popen(r'explorer "%s"' % self.path)
 
 
 class Emitter(QtCore.QObject):
